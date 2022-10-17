@@ -2,7 +2,6 @@ import java.util.Arrays;
 
 //leetcode submit region begin(Prohibit modification and deletion)
 class Solution {
-
     public int coinChange(int[] coins, int amount) {
         int[] dp = new int[amount + 1];
 

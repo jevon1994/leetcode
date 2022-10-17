@@ -1,0 +1,150 @@
+相比LRU， LFU 有些复杂，因为多了一个freq， 而且go 没有java 的linkedHahsSet 。 所以使用了map + 双向链表的方式，达到O（1）的时间复杂度。  map 维护了 key -》 value， 双向链表维护了 freq-》keys； 代码如下，仅供参考、 PS：comma，ok 写的太多了， 有点写烦了 ，肯定有优化的地方
+
+* 
+
+```
+import "container/list"
+
+type LFUCache struct {
+     kv map[int] *list.Element
+     cap int
+}
+
+type Node struct {
+     key int
+     val int
+     freq int
+}
+
+var minFreq = 0
+
+var fk map[int] *list.List
+
+func Constructor(capacity int) LFUCache {
+    if capacity < 0 || capacity > 1e4 {
+        return LFUCache{}
+    }
+
+    cache := LFUCache{}
+    cache.cap = capacity
+    cache.kv = make(map[int]*list.Element)
+    fk = make(map[int]*list.List)
+
+    return cache
+}
+
+
+func (this *LFUCache) Get(key int) int {
+    // 1 查询缓存，没有返回-1
+    // 2. 如果存在， 返回结果， freq 加一， 更新KF， FK， minFreq
+    var ok bool
+    var e *list.Element
+
+    if e, ok = this.kv[key]; !ok {
+        return -1
+    }
+
+    n := e.Value.(Node)
+    oldFreq :=  n.freq 
+    n.freq++
+
+    oKlist := fk[oldFreq]
+    oKlist.Remove(e)
+
+    var exist bool
+    var keyList *list.List
+
+    if keyList, exist = fk[n.freq];  !exist{
+        keyList = list.New()
+    } 
+
+    this.kv[key] = keyList.PushFront(n)
+    fk[n.freq] = keyList
+    if oKlist.Len() == 0 {
+        if minFreq == oldFreq {
+            minFreq++
+        }
+    }
+    return n.val
+}
+
+
+func (this *LFUCache) Put(key int, value int)  {
+    if this.cap == 0 {
+        return
+    }
+
+    if value < 0 && value > 1e9 {
+        return
+    }
+
+    if key < 0 && key > 1e5 {
+        return
+    }    
+
+    if e, exist := this.kv[key]; exist {
+        // 1、 存在更新
+        n := e.Value.(Node)
+        n.val = value
+        oldFreq := n.freq
+        n.freq++
+
+        // 更新fk
+        kList := fk[oldFreq]
+        kList.Remove(e)
+
+        var t bool
+        var nKList *list.List
+        if nKList, t = fk[oldFreq+1]; !t {
+            nKList = list.New()
+            fk[oldFreq+1] = nKList
+        }
+        // 更新kv
+        this.kv[key] = nKList.PushFront(n)
+
+        if kList.Len() == 0 {
+             if oldFreq == minFreq {
+                minFreq++
+            }
+        }
+       
+        return
+    }
+
+    // 2、 不存在，如果满了， 查找最小使用的freq 对应的K， 删掉；如果存在多个最小使用的K ，删掉最旧的那个
+    if this.cap == len(this.kv) {  // 满了,删一个
+        minList := fk[minFreq]  // 必须存在
+      
+        b := minList.Back() //  最久最小使用频次的
+        minList.Remove(b)
+        n := b.Value.(Node)
+
+        delete(this.kv, n.key) //
+
+        // if minList.len == 0 && minFreq != 1{
+        //     delete(fk, minFreq)
+        // }
+    }
+
+    nN := Node{key, value, 1}
+    minFreq = nN.freq
+    // 3、 没有满， 直接放入缓存， 更新freq
+    var keyList *list.List
+    var exist bool
+
+    if keyList, exist  = fk[minFreq]; !exist {
+        keyList = list.New()
+    }
+    this.kv[key] = keyList.PushFront(nN)
+    fk[minFreq] = keyList
+}
+
+
+/**
+ * Your LFUCache object will be instantiated and called as such:
+ * obj := Constructor(capacity);
+ * param_1 := obj.Get(key);
+ * obj.Put(key,value);
+ */
+```
+
